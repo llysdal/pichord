@@ -1,0 +1,344 @@
+<head>
+    <style>
+    body
+    {
+        background-color: #050515;
+        color: white;
+    }
+    .canvas
+    {
+        width: 90vw;
+        height: 50vh;
+        position: inline;
+    }
+    .freqSlider 
+    {
+        writing-mode: vertical-lr;
+        rotate: 180deg;
+        width: 1vw;
+        height: 40vh;
+    }
+    .sliderContainer
+    {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-evenly;
+    }
+    .waveSelectorContainer 
+    {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-evenly;
+        width: 5%;
+    }
+    .waveSelector
+    {
+        height: 2rem;
+    }
+    </style>
+</head>
+
+
+<body>
+    <div style="display: flex; flex-direction: row;">
+        <div class="waveSelectorContainer">
+            <button class="waveSelector" onclick="setTemplateSine()">SINE</button>
+            <button class="waveSelector" onclick="setTemplateSquare()">SQUARE</button>
+            <button class="waveSelector" onclick="setTemplateSaw()">SAW</button>
+            <button class="waveSelector" onclick="setTemplateTriangle()">TRIANGLE</button>
+        </div>
+    
+        <canvas class="canvas" id="canvas"></canvas>
+
+        <button onclick="startAudio()">start</button>
+        <button onclick="stopAudio()">stop</button>
+    </div>
+
+    <div id="sliderContainer" class="sliderContainer"></div>
+    
+    <span>
+        Double click slider to reset to zero
+    </span>
+    <br/>
+
+    <span id="bitDepthText">Bit Depth: 8</span>
+    <input id="bitDepthSlider" type="range" min="1" max="16" oninput="updateBitDepth(this.value)"/>
+
+    <button onclick="doExport()">Export</button>
+</body>
+
+<script>
+const canvas = document.getElementById('canvas'); // Get the canvas element
+const sliderContainer = document.getElementById('sliderContainer'); // Get the canvas element
+const ctx = canvas.getContext('2d'); // Retrieve the 2D drawing context
+
+const maxFreq = 64;
+const bufferSize = 256;
+var bitDepth = 8;
+
+const PI = 3.1415;
+const pointSize = 10;
+const halfPointSize = pointSize/2;
+
+const freqs = [];
+const freqSliders = [];
+const computedValues = [];
+const remappedValues = [];
+const exportValues = [];
+const audioSamples = [];
+
+var currentAudioBuffer = undefined;
+var PLAYING = false;
+
+document.getElementById("bitDepthSlider").value = 8;
+
+// Set up audio stuff
+const audioCtx = new AudioContext({sampleRate: 31250});
+
+function setup()
+{
+    for (var i = 0; i < bufferSize; i++)
+    {
+        computedValues[i] = 0;
+    }
+    
+    for (var i = 0; i < maxFreq; i++)
+    {
+        // Add element to freqs array
+        freqs[i] = 0;
+
+        // Create slider element on page
+        var slider = document.createElement("input");
+        slider.type = "range";
+        slider.classList.add("freqSlider");
+        slider.value = 0;
+        slider.min = -100;
+        slider.max = 100;
+        
+        // Make a by-value clone of i to capture in the lambda
+        let index = i;
+        slider.oninput = (e) => {
+            console.log("setting i: " + index + " to: " + e.target.value / 100);
+            freqs[index] = (e.target.value) / 100;
+            updateCanvas();
+        };
+        slider.ondblclick = (e) => {
+            console.log("resetting i: " + index);
+            freqs[index] = 0;
+            e.target.value = 0;
+            updateCanvas();
+        }
+        sliderContainer.appendChild(slider);
+        freqSliders[i] = slider;
+    }
+    freqs[0] = 1;
+    freqSliders[0].value = 100;
+}
+
+// assume x -> [0, 1];
+function calculateY(x)
+{
+    var y = 0;
+    for (var freq = 0; freq < maxFreq; freq++)
+    {
+        var freqMult = freqs[freq];
+        y += Math.sin((x * 2 * PI) * (freq+1)) * freqMult; 
+    }
+    return y;
+}
+
+function remap(value, inputLow, inputHigh, outputLow, outputHigh)
+{
+    return outputLow + (value - inputLow) * (outputHigh - outputLow) / (inputHigh - inputLow);
+}
+
+function updateCanvas() {
+  
+    canvas.width = window.innerWidth; // Set width to the window's width
+    canvas.height = window.innerHeight; // Set height to the window's height
+    // ... Your drawing code goes here ...
+    // For example, let's fill the canvas with a color
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    var xScale = canvas.width / (2 * PI);
+
+    ctx.fillStyle = 'white';
+    ctx.strokeStyle = "green";
+    ctx.lineWidth = 5;
+
+    for (var x = 0; x < bufferSize; x++)
+    {
+        var y = calculateY(x / bufferSize);
+        computedValues[x] = y;
+    }
+
+    var minY = Math.min(...computedValues);
+    var maxY = Math.max(...computedValues);
+
+    for (var i = 0; i < bufferSize; i++)
+    {
+        var bitDepthCorrected = Math.round(remap(computedValues[i], minY, maxY, 0, 2 ** bitDepth - 1));
+        remappedValues[i] = remap(bitDepthCorrected, 0, (2 ** bitDepth)-1, 10, canvas.height - 10);
+        exportValues[i] = bitDepthCorrected;
+        audioSamples[i] = - (bitDepthCorrected / (2 ** (bitDepth - 1)) - 1);
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height / 2);
+    for (var x = 0; x < bufferSize; x++)
+    {
+        ctx.lineTo(x / bufferSize * canvas.width, remappedValues[x]);
+    }
+    ctx.stroke();
+
+    for (var x = 0; x < bufferSize; x++)
+    {
+        ctx.fillRect((x / bufferSize * canvas.width) - (halfPointSize/2), remappedValues[x] - halfPointSize, pointSize/2, pointSize);
+    }
+
+    if (PLAYING)
+    {
+        updateAudioBuffer();
+    }
+}
+
+function setTemplateSine()
+{
+    for (var i = 0; i < maxFreq; i++)
+    {
+        freqs[i] = 0;
+        freqSliders[i].value = 0;
+    }
+    freqs[0] = 1;
+    freqSliders[0].value = 100;
+    updateCanvas();
+}
+
+function setTemplateSquare()
+{
+    for (var i = 0; i < maxFreq; i++)
+    {
+        if (i % 2 == 0)
+        {
+            freqs[i] = 1 / (i + 1);
+        }
+        else
+        {
+            freqs[i] = 0;
+        }
+        freqSliders[i].value = freqs[i] * 100;
+    }
+    updateCanvas();
+}
+
+function setTemplateSaw()
+{
+    for (var i = 0; i < maxFreq; i++)
+    {
+        freqs[i] = 1 / (i + 1);
+        freqSliders[i].value = freqs[i] * 100;
+    }
+    updateCanvas();
+}
+
+function setTemplateTriangle()
+{
+    for (var i = 0; i < maxFreq; i++)
+    {
+        if (i % 2 == 0)
+        {
+            if (i % 4 == 0)
+            {
+                freqs[i] = -( 1 / (i + 1)**2);
+            }
+            else
+            {
+                freqs[i] = 1 / (i + 1)**2;
+            }
+        }
+        else
+        {
+            freqs[i] = 0;
+        }
+        freqSliders[i].value = freqs[i] * 100;
+    }
+    updateCanvas();
+}
+
+function startAudio()
+{
+    PLAYING = true;
+    updateAudioBuffer();
+}
+
+function stopAudio()
+{
+    PLAYING = false;
+    if (currentAudioBuffer != undefined) 
+    {
+        currentAudioBuffer.stop();
+    }
+}
+
+function updateAudioBuffer()
+{
+    if (currentAudioBuffer != undefined) 
+    {
+        currentAudioBuffer.stop();
+    }
+    console.log("updateAudioBuffer");
+    var audioBufferSource = audioCtx.createBufferSource();
+    audioBufferSource.loop = true;
+    var audioBuffer = audioCtx.createBuffer(
+        1,
+        bufferSize * 8,
+        audioCtx.sampleRate,
+    );
+    // Fill the buffer with white noise;
+    // just random values between -1.0 and 1.0
+    for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+        // This gives us the actual array that contains the data
+        const nowBuffering = audioBuffer.getChannelData(channel);
+        for (let i = 0; i < audioBuffer.length; i++) {
+            // Math.random() is in [0; 1.0]
+            // audio needs to be in [-1.0; 1.0]
+            nowBuffering[i] = audioSamples[i % bufferSize];
+        }
+    }
+    audioBufferSource.buffer = audioBuffer;
+    audioBufferSource.connect(audioCtx.destination);
+    audioBufferSource.start();
+    currentAudioBuffer = audioBufferSource;
+}
+
+function doExport()
+{
+    var str = "NEW_WAVE:\n";
+    for (var i = 0; i < bufferSize / 8; i++)
+    {
+        str += "\tDT ";
+        for (var byte = 0; byte < 8; byte++)
+        {
+            str += "0x" + exportValues[i * 8 + byte].toString(16).padStart(2, "0").toUpperCase();
+            if (byte < 7) { str += ", "; }
+        }
+        str += "\n";
+    }
+    console.log(str);
+
+    navigator.clipboard.writeText(str);
+}
+
+function updateBitDepth(newBitDepth)
+{
+    bitDepth = newBitDepth;
+    document.getElementById("bitDepthText").textContent = "Bit Depth: " + newBitDepth;
+    updateCanvas();
+}
+
+
+window.addEventListener('resize', updateCanvas);
+setup();
+updateCanvas();
+</script>
