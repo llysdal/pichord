@@ -318,7 +318,7 @@
 
     function doExport() {
         let stateString = saveState(false)
-        var str = `NEW_WAVE:\n#IFDEF 0\n${stateString}\n#ENDIF\n`;
+        var str = `NEW_WAVE:\n#IFDEF _\n${stateString}\n#ENDIF\n`;
         for (var i = 0; i < bufferSize / 8; i++) {
             str += "\tDT ";
             for (var byte = 0; byte < 8; byte++) {
