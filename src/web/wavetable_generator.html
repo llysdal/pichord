@@ -261,10 +261,10 @@
         for (var i = 0; i < maxFreq; i++) {
             if (i % 2 == 0) {
                 if (i % 4 == 0) {
-                    freqs[i] = -(1 / (i + 1) ** 2);
+                    freqs[i] = (1 / (i + 1) ** 2);
                 }
                 else {
-                    freqs[i] = 1 / (i + 1) ** 2;
+                    freqs[i] = -(1 / (i + 1) ** 2);
                 }
             }
             else {
