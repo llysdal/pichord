@@ -43,6 +43,7 @@
         <div class="verticalButtonContainer">
             <button class="waveSelector" onclick="setTemplateSine()">SINE</button>
             <button class="waveSelector" onclick="setTemplateSquare()">SQUARE</button>
+            <button class="waveSelector" onclick="setTemplateDoubleSquare()">DBL SQUARE</button>
             <button class="waveSelector" onclick="setTemplateSaw()">SAW</button>
             <button class="waveSelector" onclick="setTemplateTriangle()">TRIANGLE</button>
             </p>
@@ -52,8 +53,13 @@
 
         <canvas class="canvas" id="canvas"></canvas>
         <div class="verticalButtonContainer">
-            <button onclick="startAudio()">start</button>
-            <button onclick="stopAudio()">stop</button>
+            <button onclick="startAudio()">START</button>
+            <button onclick="stopAudio()">STOP</button>
+            </p>
+            <button onclick="doExport()">EXPORT</button>
+            </p>
+            <button onclick="saveState()">SAVE STATE</button>
+            <button onclick="loadState()">LOAD STATE</button>
         </div>
     </div>
 
@@ -66,8 +72,6 @@
 
     <span id="bitDepthText">Bit Depth: 8</span>
     <input id="bitDepthSlider" type="range" min="1" max="16" oninput="updateBitDepth(this.value)" />
-
-    <button onclick="doExport()">Export</button>
 </body>
 
 <script>
@@ -75,16 +79,16 @@
     const sliderContainer = document.getElementById('sliderContainer'); // Get the canvas element
     const ctx = canvas.getContext('2d'); // Retrieve the 2D drawing context
 
-    const maxFreq = 64;
-    const bufferSize = 256;
+    let maxFreq = 64;
+    let bufferSize = 256;
     var bitDepth = 8;
 
     const PI = 3.1415;
     const pointSize = 10;
     const halfPointSize = pointSize / 2;
 
-    const freqs = [];
-    const freqSliders = [];
+    let freqs = [];
+    let freqSliders = [];
     const computedValues = [];
     const remappedValues = [];
     const exportValues = [];
@@ -103,6 +107,8 @@
             computedValues[i] = 0;
         }
 
+        freqs = [];
+        sliderContainer.replaceChildren();
         for (var i = 0; i < maxFreq; i++) {
             // Add element to freqs array
             freqs[i] = 0;
@@ -224,6 +230,25 @@
         updateCanvas();
     }
 
+    function setTemplateDoubleSquare() {
+        for (var i = 0; i < maxFreq; i++) {
+            if (i % 2 == 0) {
+                freqs[i] = 1 / (i + 1);
+                
+            }
+            else if ((i-1) % 4 == 0 && i > 0)
+            {
+                freqs[i] = 1 / ((i+1) / 2);
+            }
+            else {
+                freqs[i] = 0;
+            }
+        }
+        freqs[1] = 1;
+        updateSliders();
+        updateCanvas();
+    }
+
     function setTemplateSaw() {
         for (var i = 0; i < maxFreq; i++) {
             freqs[i] = 1 / (i + 1);
@@ -292,7 +317,8 @@
     }
 
     function doExport() {
-        var str = "NEW_WAVE:\n";
+        let stateString = saveState(false)
+        var str = `NEW_WAVE:\n#IFDEF 0\n${stateString}\n#ENDIF\n`;
         for (var i = 0; i < bufferSize / 8; i++) {
             str += "\tDT ";
             for (var byte = 0; byte < 8; byte++) {
@@ -304,6 +330,7 @@
         console.log(str);
 
         navigator.clipboard.writeText(str);
+        alert("Export copied to clipboard!");
     }
 
     function updateBitDepth(newBitDepth) {
@@ -326,7 +353,7 @@
         for (let i = startHarmonic + 1; i < maxFreq; i++)
         {
             let currentFalloff = Math.log2(i - startHarmonic + 1) * falloff; 
-            freqs[i] =  freqs[i] * Math.pow(10, -currentFalloff/20);
+            freqs[i] = freqs[i] * Math.pow(10, -currentFalloff/20);
         }
         updateSliders();
         updateCanvas();
@@ -345,12 +372,42 @@
         for (let i = startHarmonic - 1; i >= 0; i--)
         {
             let currentFalloff = Math.log2(startHarmonic - i) * falloff; 
-            freqs[i] =  freqs[i] * Math.pow(10, -currentFalloff/20);
+            freqs[i] = freqs[i] * Math.pow(10, -currentFalloff/20);
         }
         updateSliders();
         updateCanvas();
     }
 
+    function saveState(showDialog = true)
+    {
+        let state = {};
+        state["BitDepth"] = bitDepth;
+        state["MaxFreq"] = maxFreq;
+        state["BufferSize"] = bufferSize;
+        state["Frequencies"] = "[" + freqs.toString() + "]";
+        let stateString = JSON.stringify(state, null, " ");
+        console.log(stateString);
+        navigator.clipboard.writeText(stateString);
+        if (showDialog)
+        {
+            alert("State copied to clipboard!");
+        }
+        return stateString;
+    }
+
+    function loadState()
+    {
+        let stateString = prompt("Enter your saved state:");
+        if (stateString == null || stateString == "") return;
+        let state = JSON.parse(stateString);
+        bitDepth = state["BitDepth"];
+        maxFreq = state["MaxFreq"];
+        bufferSize = state["BufferSize"];
+        setup();
+        freqs = JSON.parse(state["Frequencies"]);
+        updateSliders();
+        updateCanvas();
+    }
 
     window.addEventListener('resize', updateCanvas);
     setup();
