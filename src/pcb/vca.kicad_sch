@@ -2,7 +2,7 @@
 	(version 20250114)
 	(generator "eeschema")
 	(generator_version "9.0")
-	(uuid "845c2f14-684d-4473-9487-2f6dad8b04a7")
+	(uuid "c5c8f47a-3fab-489b-88f9-40e4fbfa542c")
 	(paper "A4")
 	(lib_symbols
 		(symbol "Amplifier_Operational:LM13700"
@@ -3123,7 +3123,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-16_W7.62mm_LongPads"
 			(at 63.5 24.765 0)
 			(effects
 				(font
@@ -3301,7 +3301,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-16_W7.62mm_LongPads"
 			(at 48.26 31.115 0)
 			(effects
 				(font
@@ -3413,7 +3413,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-8_W7.62mm_LongPads"
 			(at 40.64 31.75 0)
 			(effects
 				(font
@@ -3839,7 +3839,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-16_W7.62mm_LongPads"
 			(at 73.66 135.255 0)
 			(effects
 				(font
@@ -5721,7 +5721,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-8_W7.62mm_LongPads"
 			(at 110.49 132.08 0)
 			(effects
 				(font
@@ -5873,7 +5873,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-8_W7.62mm_LongPads"
 			(at 110.49 81.28 0)
 			(effects
 				(font
@@ -5959,7 +5959,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-16_W7.62mm_LongPads"
 			(at 76.2 24.765 0)
 			(effects
 				(font
@@ -6343,7 +6343,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Package_DIP:DIP-16_W7.62mm_LongPads"
 			(at 73.66 84.455 0)
 			(effects
 				(font
