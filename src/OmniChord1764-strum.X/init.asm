@@ -5,11 +5,6 @@
     MOVWF   OSCCON
     MOVLW   00000000b	; No tuning
     MOVWF   OSCTUNE	
-    
-;----------------- I2C
-;	BANKSEL	SSP1CON1
-;	MOVLW	00101000b	; Enable I2C serial port, I2C master mode
-;	MOVWF	SSP1CON1
 
 ;----------------- ADC
     BANKSEL ADCON1
@@ -76,7 +71,7 @@
     BANKSEL TRISA	; Input/Output (1 is input, 0 is output)
     MOVLW   00001000b
     MOVWF   TRISA	; bit 3 has to be 1 (for reasons)
-    MOVLW   00000000b
+    MOVLW   00000011b	; SDA and SCL are inputs
     MOVWF   TRISC
     BANKSEL ANSELA	; Both ports are digital I/O
     CLRF    ANSELA
@@ -85,8 +80,35 @@
     BANKSEL PORTA	; And we'll clear them
     CLRF    PORTA
     CLRF    PORTC
+
+;----------------- I2C
+	BANKSEL	SSP1CON1
+	MOVLW	00101000b	; Enable I2C serial port, I2C master mode
+	MOVWF	SSP1CON1
+	
+	MOVLW	0x13		; Set I2C baud rate to be 400kHz
+;	MOVLW	0x4F		; Set I2C baud rate to be 100kHz
+	MOVWF	SSP1ADD
+
+;----------------- Peripheral select
+	BANKSEL	SSPCLKPPS
+	MOVLW	10000b
+	MOVWF	SSPCLKPPS	; RC0 is I2C SCL input
+
+	BANKSEL	SSPDATPPS
+	MOVLW	10001b
+	MOVWF	SSPDATPPS	; RC1 is I2C SDA input
+
+	BANKSEL	RC0PPS
+	MOVLW	10010b
+	MOVWF	RC0PPS		; RC0 is I2C SCL output
+
+	BANKSEL	RC1PPS
+	MOVLW	10011b
+	MOVWF	RC1PPS		; RC1 is I2C SDA output
     
-;----------------- Variables       
+;----------------- Variables     
+	BANKSEL	0
     CLRF    CHORD_CHANGE_OVERFLOW
     CLRF    CURRENT_CHORD_MODE
     CLRF    CURRENT_CHORD
@@ -108,6 +130,44 @@
     MOVLW   #BUFF1_LO
     MOVWF   SAMPLE_POS
     
+;----------------- MPR121 init config
+	BANKSEL 0
+	; Autoconfig reg 1
+	; https://vscode.dev/github/adafruit/Adafruit_MPR121/blob/master/Adafruit_MPR121.cpp#L147
+	MOVLW	0x7B
+	MOVWF	I2C_REG
+	MOVLW	00001011b
+	MOVWF	I2C_DATA
+	CALL	I2CWrite
+
+	; Autoconfig MPR121_UPLIMIT
+	MOVLW	0x7D	; MPR121_UPLIMIT
+	MOVWF	I2C_REG
+	MOVLW	200		; ((Vdd - 0.7)/Vdd) * 256
+	MOVWF	I2C_DATA
+	CALL	I2CWrite
+
+	; Autoconfig MPR121_TARGETLIMIT
+	MOVLW	0x7B	; MPR121_TARGETLIMIT
+	MOVWF	I2C_REG
+	MOVLW	180		; UPLIMIT * 0.9
+	MOVWF	I2C_DATA
+	CALL	I2CWrite
+
+	; Autoconfig MPR121_LOWLIMIT
+	MOVLW	0x7B	; MPR121_LOWLIMIT
+	MOVWF	I2C_REG
+	MOVLW	130		; UPLIMIT * 0.65
+	MOVWF	I2C_DATA
+	CALL	I2CWrite
+
+	; Enable electrodes
+	MOVLW	0x5E	; MPR121_ECR
+	MOVWF	I2C_REG
+	MOVLW	10000000b + 12	; enable all 12
+	MOVWF	I2C_DATA
+	CALL	I2CWrite
+
 ;----------------- Get ready for start 
     BANKSEL T1CON
     BSF	    T1CON, TMR1ON   ; Start timer 1
@@ -116,5 +176,3 @@
     BSF	    T4CON, TMR4ON   ; Start timer 4
     
     MOVLB   0	    ; Bank 0
-
-

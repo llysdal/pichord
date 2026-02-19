@@ -18,8 +18,6 @@
 ;			RC4 6-|  4	|-9	 RC1	SDA
 ;			RC3 7-|_____|-8	 RC2	DAC1 out
 
-; MPR121 ADDR = 0x5A if ADDR connected to VSS
-
 ;-------------------------------------------------------------------------------
 ;	MEMORY
 ;-------------------------------------------------------------------------------
@@ -116,6 +114,12 @@
 	SAMPLE_HI
 	OUTPUT1_LO
 	OUTPUT1_HI
+
+	ELE_LO
+	ELE_HI
+
+	I2C_REG
+	I2C_DATA
     ENDC
     
 ;-------------------------------------------------------------------------------
@@ -130,8 +134,11 @@
 
 #define SCL		PORTC, 0
 #define SDA		PORTC, 1
+#define I2C_SLAVE_ADDR_READ		(0x5A<<1) + 1
+#define I2C_SLAVE_ADDR_WRITE	(0x5A<<1)
 
 #define SAMPLES_REQ	SYS_FLAGS, 0	; New samples are required
+#define I2C_REQ		SYS_FLAGS, 1	; We should read I2C data again
     
 #define BUFFER_OVERFLOW	SAMPLE_POS, 4	; Have we run out of buffer?
 #define BUFFER_ONE		SAMPLE_POS, 5	; Are we using buffer one?
@@ -197,12 +204,17 @@ OutputSample:
     
 StrumAdvance:
     BCF	    PIR1, TMR1IF    ; Clear TMR1 interrupt flag
-    
+
+;----------------- I2C update strum
+	CALL	I2CUpdateStrum
+
 ;----------------- Delay
-    MOVLW   8
+    MOVLW   64
     ADDWF   CHORD_CHANGE_OVERFLOW, F
     BTFSS   CARRY
 		GOTO    InterruptExit
+
+	BSF		I2C_REQ
     
 ;----------------- Chord handling
     BTFSS   CHORD_MODE_UPPER_BANK
@@ -233,34 +245,32 @@ StrumAdvance:
     MOVWF   CHORD3_NOTE
 
 ;----------------- Sequence advancement
-	INCF	CURRENT_STRUM, F
-	MOVF	CURRENT_STRUM, W
-	SUBLW	12
-	BTFSS	ZERO
-		GOTO	StrumNoClear
-	CLRF	CURRENT_STRUM
-	GOTO	IncChordMode
+;	GOTO	InterruptExit
+
+;	INCF	CURRENT_STRUM, F
+;	MOVF	CURRENT_STRUM, W
+;	SUBLW	12
+;	BTFSS	ZERO
+;		GOTO	StrumNoClear
+;	CLRF	CURRENT_STRUM
+;	GOTO	IncChordMode
 StrumNoClear:
-	CALL	UpdateStrum
 	GOTO	InterruptExit
 
-IncChordMode:
-	INCF    CURRENT_CHORD_MODE, F	; Increment current chord mode
-    MOVF    CURRENT_CHORD_MODE, W
-    SUBLW   7					; If current chord mode < 7
-    BTFSS   ZERO
-		GOTO    InterruptExit	; then Exit
-    CLRF    CURRENT_CHORD_MODE	; else, reset current chord mode
-    
-    INCF    CURRENT_CHORD, F	; Increment current chord
-    MOVF    CURRENT_CHORD, W
-    SUBLW   12					; If current chord < 12
-    BTFSS   ZERO
-		GOTO    InterruptExit   ; then Exit
-    CLRF    CURRENT_CHORD		; else, reset current chord
-
-InterruptExit:
-    RETFIE
+;IncChordMode:
+;	INCF    CURRENT_CHORD_MODE, F	; Increment current chord mode
+;    MOVF    CURRENT_CHORD_MODE, W
+;    SUBLW   7					; If current chord mode < 7
+;    BTFSS   ZERO
+;		GOTO    InterruptExit	; then Exit
+;    CLRF    CURRENT_CHORD_MODE	; else, reset current chord mode
+;    
+;    INCF    CURRENT_CHORD, F	; Increment current chord
+;    MOVF    CURRENT_CHORD, W
+;    SUBLW   12					; If current chord < 12
+;    BTFSS   ZERO
+;		GOTO    InterruptExit   ; then Exit
+;    CLRF    CURRENT_CHORD		; else, reset current chord
     
 DecreaseVolume:
     BCF	    PIR4, TMR4IF    ; Clear TMR4 interrupt flag
@@ -306,6 +316,38 @@ DecreaseVolume:
 		DECF	STRUM4_3_VOL, F
 
 	GOTO	InterruptExit
+
+I2CUpdateStrum:
+#define		STRUM_VOL	6
+	BTFSC	ELE_LO, 0
+		BSF	STRUM1_1_VOL, STRUM_VOL
+	BTFSC	ELE_LO, 1
+		BSF	STRUM1_1_VOL, STRUM_VOL
+	BTFSC	ELE_LO, 2
+		BSF	STRUM1_2_VOL, STRUM_VOL
+
+	BTFSC	ELE_LO, 3
+		BSF	STRUM2_1_VOL, STRUM_VOL
+	BTFSC	ELE_LO, 4
+		BSF	STRUM2_1_VOL, STRUM_VOL
+	BTFSC	ELE_LO, 5
+		BSF	STRUM2_2_VOL, STRUM_VOL
+
+	BTFSC	ELE_LO, 6
+		BSF	STRUM3_1_VOL, STRUM_VOL
+	BTFSC	ELE_LO, 7
+		BSF	STRUM3_1_VOL, STRUM_VOL
+	BTFSC	ELE_HI, 0
+		BSF	STRUM3_2_VOL, STRUM_VOL
+
+	BTFSC	ELE_HI, 1
+		BSF	STRUM4_1_VOL, STRUM_VOL
+	BTFSC	ELE_HI, 2
+		BSF	STRUM4_1_VOL, STRUM_VOL
+	BTFSC	ELE_HI, 3
+		BSF	STRUM4_2_VOL, STRUM_VOL
+
+	RETURN
 
 UpdateStrum:
 	MOVF	CURRENT_STRUM, W
@@ -358,6 +400,9 @@ UpdateStrum:
 		BSF	STRUM4_3_VOL, 7
 	RETURN
 
+InterruptExit:
+    RETFIE
+
 ;-------------------------------------------------------------------------------
 ;	SETUP
 ;-------------------------------------------------------------------------------
@@ -369,7 +414,7 @@ Init:
 ;	SAMPLE GEN
 ;-------------------------------------------------------------------------------
 SampleGeneration:
-	BSF		TEST_PIN
+;	BSF		TEST_PIN
 
     MOVLW   #BUFF2_LO  ; Assume buffer 2
     BTFSS   BUFFER_ONE
@@ -534,17 +579,131 @@ GenerateStrumSample:
 ;----------------- Fulfillment
     BCF	    SAMPLES_REQ	    ; We've fulfilled the request for more samples
     
-	BCF		TEST_PIN
+;	BCF		TEST_PIN
 
     RETURN
     
-    
+;-------------------------------------------------------------------------------
+;	I2C
+;-------------------------------------------------------------------------------
+I2CWaitUntilIdle:
+	MOVLW	00011111b		;  SEN, RSEN, PEN, RCEN and ACKEN
+	ANDWF	SSP1CON2, W		
+	BTFSS	ZERO
+		GOTO	I2CWaitUntilIdle
+	BTFSC	SSP1STAT, R_NOT_W
+		GOTO	$-1
+
+	RETURN
+
+; Reads 0x00 and 0x01 into EKE_LO and ELE_HI
+I2CRead:
+	BANKSEL	0
+	BSF		TEST_PIN
+
+	BANKSEL	SSP1BUF
+	CALL	I2CWaitUntilIdle
+
+	BSF		SSP1CON2, SEN	; Initiate start condition
+	CALL	I2CWaitUntilIdle
+
+	MOVLW	I2C_SLAVE_ADDR_WRITE; Load I2C slave address
+	MOVWF	SSP1BUF				; Transmission starts here
+	CALL	I2CWaitUntilIdle
+	BTFSC	SSP1CON2, ACKSTAT
+		GOTO I2CReadNoAck		; No ACK, let's give up
+
+;	MOVLW	0x00				; Touch statis register (0 - 7)
+	MOVLW	0x00
+	MOVWF	SSP1BUF
+	CALL	I2CWaitUntilIdle
+	BTFSC	SSP1CON2, ACKSTAT
+		GOTO I2CReadNoAck		; No ACK, let's give up
+
+	BSF		SSP1CON2, RSEN	; Initiate repeated start condition
+	CALL	I2CWaitUntilIdle
+
+	MOVLW	I2C_SLAVE_ADDR_READ ; Load I2C slave address
+	MOVWF	SSP1BUF				; Transmission starts here
+	CALL	I2CWaitUntilIdle
+	BTFSC	SSP1CON2, ACKSTAT
+		GOTO I2CReadNoAck		; No ACK, let's give up
+	
+	BSF		SSP1CON2, RCEN		; Configure as receiver
+	BTFSS	SSP1STAT, BF		; Wait until we've receieved
+		GOTO	$-1
+	
+	MOVF	SSP1BUF, W		; Read the data
+	MOVWF	ELE_LO
+	BCF		SSP1STAT, BF	; Signify we've read the data
+
+	BCF		SSP1CON2, ACKDT	; Awknowledge
+	BSF		SSP1CON2, ACKEN
+	CALL	I2CWaitUntilIdle
+
+	BSF		SSP1CON2, RCEN		; Configure as receiver
+	BTFSS	SSP1STAT, BF		; Wait until we've receieved
+		GOTO	$-1
+
+	MOVF	SSP1BUF, W		; Read the data
+	MOVWF	ELE_HI
+	BCF		SSP1STAT, BF	; Signify we've read the data
+
+;	; we actually want one more message here, but lets just stop for now
+
+	BSF		SSP1CON2, ACKDT	; No awknowledge
+	BSF		SSP1CON2, ACKEN
+
+I2CReadNoAck:
+	BANKSEL	0
+	BCF		TEST_PIN
+
+	BCF		I2C_REQ		; and we're done!
+	RETURN		
+
+; Writes I2C_DATA to I2C_REG
+I2CWrite:
+	BANKSEL	SSP1BUF
+	CALL	I2CWaitUntilIdle
+
+	BSF		SSP1CON2, SEN	; Initiate start condition
+	CALL	I2CWaitUntilIdle
+
+	MOVLW	I2C_SLAVE_ADDR_WRITE; Load I2C slave address
+	MOVWF	SSP1BUF				; Transmission starts here
+	CALL	I2CWaitUntilIdle
+	BTFSC	SSP1CON2, ACKSTAT
+		GOTO I2CReadNoAck		; No ACK, let's give up
+
+;	MOVLW	0x00				; Touch statis register (0 - 7)
+	MOVF	I2C_REG, W
+	MOVWF	SSP1BUF
+	CALL	I2CWaitUntilIdle
+	BTFSC	SSP1CON2, ACKSTAT
+		GOTO I2CReadNoAck		; No ACK, let's give up
+
+	MOVF	I2C_DATA, W
+	MOVWF	SSP1BUF
+	CALL	I2CWaitUntilIdle
+	BTFSC	SSP1CON2, ACKSTAT
+		GOTO I2CReadNoAck		; No ACK, let's give up
+
+	BSF		SSP1CON2, PEN
+
+I2CWriteNoAck:
+	BANKSEL	0
+	RETURN		
+
+
 ;-------------------------------------------------------------------------------
 ;	RUNTIME
 ;-------------------------------------------------------------------------------
 Main:
     BTFSC   SAMPLES_REQ
 		CALL    SampleGeneration    ; If we require more samples, let's generate some!
+
+	BTFSC	I2C_REQ
+		CALL	I2CRead
 
     GOTO    Main
     
