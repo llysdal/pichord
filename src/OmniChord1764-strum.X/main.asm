@@ -414,7 +414,7 @@ Init:
 ;	SAMPLE GEN
 ;-------------------------------------------------------------------------------
 SampleGeneration:
-;	BSF		TEST_PIN
+	BSF		TEST_PIN
 
     MOVLW   #BUFF2_LO  ; Assume buffer 2
     BTFSS   BUFFER_ONE
@@ -579,7 +579,7 @@ GenerateStrumSample:
 ;----------------- Fulfillment
     BCF	    SAMPLES_REQ	    ; We've fulfilled the request for more samples
     
-;	BCF		TEST_PIN
+	BCF		TEST_PIN
 
     RETURN
     
@@ -599,7 +599,7 @@ I2CWaitUntilIdle:
 ; Reads 0x00 and 0x01 into EKE_LO and ELE_HI
 I2CRead:
 	BANKSEL	0
-	BSF		TEST_PIN
+;	BSF		TEST_PIN
 
 	BANKSEL	SSP1BUF
 	CALL	I2CWaitUntilIdle
@@ -656,7 +656,7 @@ I2CRead:
 
 I2CReadNoAck:
 	BANKSEL	0
-	BCF		TEST_PIN
+;	BCF		TEST_PIN
 
 	BCF		I2C_REQ		; and we're done!
 	RETURN		
